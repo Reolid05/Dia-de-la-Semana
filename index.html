@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#111827">
+<title>¿Qué día fue?</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#f3f4f6;color:#111827;min-height:100vh}
+.container{width:min(760px,94%);margin:0 auto;padding:28px 0 44px}
+header{text-align:center;margin-bottom:22px}
+h1{font-size:clamp(28px,6vw,44px);margin:8px 0 6px}
+.subtitle{color:#6b7280;margin:0}
+.card{background:white;border-radius:24px;padding:24px;box-shadow:0 10px 35px rgba(0,0,0,.08);margin-bottom:16px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.stat{background:white;border-radius:16px;padding:12px;text-align:center;box-shadow:0 5px 20px rgba(0,0,0,.05)}
+.stat b{display:block;font-size:22px}.stat span{font-size:12px;color:#6b7280}
+.date{text-align:center;font-size:clamp(34px,9vw,62px);font-weight:800;line-height:1.1;margin:24px 0}
+.question{text-align:center;color:#6b7280}
+button,select{font:inherit}
+button{border:0;border-radius:14px;padding:14px 18px;font-weight:700;cursor:pointer;transition:.15s transform,.15s opacity}
+button:active{transform:scale(.98)}
+.primary{background:#111827;color:white}
+.mic{display:block;width:100%;font-size:20px;padding:20px;margin-top:18px}
+.mic.listening{background:#dc2626}
+.secondary{background:#e5e7eb;color:#111827}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.row>*{flex:1}
+select{width:100%;padding:13px;border:1px solid #d1d5db;border-radius:12px;background:white}
+.result{text-align:center;padding:18px;border-radius:16px;margin-top:18px;font-size:20px;font-weight:800}
+.correct{background:#dcfce7;color:#166534}.wrong{background:#fee2e2;color:#991b1b}
+.transcript{text-align:center;margin-top:12px;color:#4b5563;min-height:24px}
+.explanation{margin-top:18px;border-top:1px solid #e5e7eb;padding-top:18px}
+.step{display:flex;justify-content:space-between;gap:16px;padding:11px 0;border-bottom:1px solid #f3f4f6}
+.step:last-child{border-bottom:0}.step strong{font-size:16px}.step code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.hidden{display:none}
+.help{color:#6b7280;font-size:13px;line-height:1.5}
+@media(max-width:520px){.stats{grid-template-columns:repeat(2,1fr)}.card{padding:18px}.date{font-size:40px}}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+  <h1>¿Qué día fue?</h1>
+  <p class="subtitle">Entrena tu cálculo mental del día de la semana</p>
+</header>
+
+<div class="stats">
+  <div class="stat"><b id="round">1</b><span>Pregunta</span></div>
+  <div class="stat"><b id="score">0</b><span>Aciertos</span></div>
+  <div class="stat"><b id="errors">0</b><span>Errores</span></div>
+  <div class="stat"><b id="accuracy">0%</b><span>Precisión</span></div>
+</div>
+
+<div class="card">
+  <div class="question">¿Qué día de la semana fue?</div>
+  <div class="date" id="dateDisplay">22 de agosto de 2008</div>
+
+  <div class="row">
+    <div>
+      <label class="help">Dificultad</label>
+      <select id="difficulty">
+        <option value="easy">Fácil · 2000–2099</option>
+        <option value="medium">Medio · 1900–2099</option>
+        <option value="hard">Difícil · 1600–2099</option>
+        <option value="custom">Personalizado</option>
+      </select>
+    </div>
+    <div id="customYears" class="hidden">
+      <label class="help">Rango</label>
+      <div class="row">
+        <input id="minYear" type="number" value="1600" min="1600" max="2099" style="padding:13px;border:1px solid #d1d5db;border-radius:12px;width:100%">
+        <input id="maxYear" type="number" value="2099" min="1600" max="2099" style="padding:13px;border:1px solid #d1d5db;border-radius:12px;width:100%">
+      </div>
+    </div>
+  </div>
+
+  <button class="primary mic" id="micBtn">🎙️ Responder por voz</button>
+  <div class="transcript" id="transcript"></div>
+  <div id="result"></div>
+  <div id="explanation" class="explanation hidden"></div>
+
+  <div class="row" style="margin-top:18px">
+    <button class="secondary" id="nextBtn">Nueva fecha</button>
+    <button class="secondary" id="speakBtn">🔊 Escuchar fecha</button>
+  </div>
+</div>
+
+<div class="card">
+  <b>Cómo funciona</b>
+  <p class="help">La aplicación usa tu método: día + código del mes + código del siglo + últimos dos dígitos del año + ⌊año/4⌋. El total se divide entre 7 y el resto se traduce con Domingo=0, Lunes=1, …, Sábado=6.</p>
+</div>
+</div>
+
+<script>
+const DAYS=["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
+const DAY_CODES={Domingo:0,Lunes:1,Martes:2,"Miércoles":3,Jueves:4,Viernes:5,Sábado:6};
+const MONTHS=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+const MONTH_CODES=[0,3,3,6,1,4,6,2,5,0,3,5];
+const CENTURY_CODES={1600:6,1700:4,1800:2,1900:0,2000:6};
+
+let current=null, round=1, score=0, errors=0, answered=false, recognition=null;
+
+const $=id=>document.getElementById(id);
+const dateDisplay=$("dateDisplay"), result=$("result"), explanation=$("explanation"), transcript=$("transcript");
+
+function randomInt(a,b){return Math.floor(Math.random()*(b-a+1))+a}
+function isLeap(y){return y%4===0 && (y%100!==0 || y%400===0)}
+function daysInMonth(y,m){return [31,isLeap(y)?29:28,31,30,31,30,31,31,30,31,30,31][m]}
+
+function getRange(){
+  const d=$("difficulty").value;
+  if(d==="easy") return [2000,2099];
+  if(d==="medium") return [1900,2099];
+  if(d==="hard") return [1600,2099];
+  let a=parseInt($("minYear").value)||1600,b=parseInt($("maxYear").value)||2099;
+  return [Math.max(1600,Math.min(a,b)),Math.min(2099,Math.max(a,b))];
+}
+
+// Exact algorithm supplied by the user:
+// day + month code + century code + year(last 2 digits) + floor(last2/4), mod 7.
+function calculate(y,m,d){
+  const last2=y%100;
+  const century=Math.floor(y/100)*100;
+  const centuryCode=CENTURY_CODES[century];
+  if(centuryCode===undefined) throw new Error("Siglo fuera del rango admitido.");
+  const yearQuarter=Math.floor(last2/4);
+  const total=d+MONTH_CODES[m]+centuryCode+last2+yearQuarter;
+  const remainder=total%7;
+  return {dayIndex:remainder, dayName:DAYS[remainder], day:d, month:m, year:y,
+    monthCode:MONTH_CODES[m], century, centuryCode, last2, yearQuarter,total,remainder};
+}
+
+function newDate(){
+  const [min,max]=getRange();
+  const y=randomInt(min,max), m=randomInt(0,11), d=randomInt(1,daysInMonth(y,m));
+  current=calculate(y,m,d); answered=false;
+  dateDisplay.textContent=`${d} de ${MONTHS[m]} de ${y}`;
+  result.className=""; result.innerHTML="";
+  explanation.classList.add("hidden"); explanation.innerHTML="";
+  transcript.textContent="";
+  $("round").textContent=round;
+}
+
+function speak(text){
+  if("speechSynthesis" in window){
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang="es-ES"; u.rate=.95; speechSynthesis.speak(u);
+  }
+}
+
+function explain(c){
+  explanation.classList.remove("hidden");
+  explanation.innerHTML=`
+    <h3>📐 Cálculo paso a paso</h3>
+    <div class="step"><strong>1. Día</strong><code>${c.day}</code></div>
+    <div class="step"><strong>2. Mes · ${MONTHS[c.month]}</strong><code>${c.monthCode}</code></div>
+    <div class="step"><strong>3. Siglo · ${c.century}</strong><code>${c.centuryCode}</code></div>
+    <div class="step"><strong>4. Últimos 2 dígitos del año</strong><code>${c.last2}</code></div>
+    <div class="step"><strong>5. Año ÷ 4</strong><code>⌊${c.last2} ÷ 4⌋ = ${c.yearQuarter}</code></div>
+    <div class="step"><strong>6. Sumamos</strong><code>${c.day} + ${c.monthCode} + ${c.centuryCode} + ${c.last2} + ${c.yearQuarter} = ${c.total}</code></div>
+    <div class="step"><strong>7. Dividimos entre 7</strong><code>${c.total} ÷ 7 → resto ${c.remainder}</code></div>
+    <div class="step"><strong>8. Equivalencia</strong><code>${c.remainder} = ${c.dayName}</code></div>
+  `;
+}
+
+function normalize(s){
+  return s.toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g,"")
+    .replace(/[^a-zñü\\s]/g," ").replace(/\\s+/g," ").trim();
+}
+function parseDay(text){
+  const n=normalize(text);
+  const candidates=[
+    ["miércoles","miércoles"],["miercoles","miércoles"],["sábado","sábado"],["sabado","sábado"],
+    ["domingo","domingo"],["lunes","lunes"],["martes","martes"],["jueves","jueves"],["viernes","viernes"]
+  ];
+  for(const [a,d] of candidates) if(n.includes(normalize(a))) return d;
+  return null;
+}
+
+function submitAnswer(spoken){
+  if(answered || !current) return;
+  answered=true;
+  const answer=parseDay(spoken);
+  transcript.textContent=`Has dicho: "${spoken}"`;
+  if(answer===current.dayName){
+    score++; result.className="result correct"; result.textContent="✅ ¡Correcto!";
+    speak("Correcto");
+  }else{
+    errors++; result.className="result wrong";
+    result.innerHTML=`❌ Incorrecto<br><small>La respuesta correcta era ${current.dayName}</small>`;
+    explain(current);
+    speak(`Incorrecto. La respuesta correcta era ${current.dayName}.`);
+  }
+  updateStats();
+}
+
+function updateStats(){
+  $("score").textContent=score;
+  $("errors").textContent=errors;
+  const total=score+errors;
+  $("accuracy").textContent=(total?Math.round(score/total*100):0)+"%";
+}
+
+function startRecognition(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){
+    transcript.textContent="Tu navegador no admite reconocimiento de voz. Prueba con Chrome o Edge.";
+    return;
+  }
+  if(recognition) recognition.abort();
+  recognition=new SR();
+  recognition.lang="es-ES"; recognition.interimResults=false; recognition.maxAlternatives=3;
+  $("micBtn").classList.add("listening"); $("micBtn").textContent="🔴 Escuchando…";
+  recognition.onresult=e=>{
+    const text=e.results[0][0].transcript;
+    submitAnswer(text);
+  };
+  recognition.onerror=e=>{
+    transcript.textContent=e.error==="not-allowed"?"Necesito permiso para usar el micrófono.":`No he podido entenderte (${e.error}).`;
+  };
+  recognition.onend=()=>{
+    $("micBtn").classList.remove("listening"); $("micBtn").textContent="🎙️ Responder por voz";
+  };
+  recognition.start();
+}
+
+$("micBtn").onclick=startRecognition;
+$("nextBtn").onclick=()=>{round++;newDate()};
+$("speakBtn").onclick=()=>current&&speak(`¿Qué día de la semana fue el ${current.day} de ${MONTHS[current.month]} de ${current.year}?`);
+$("difficulty").onchange=()=>{
+  $("customYears").classList.toggle("hidden",$("difficulty").value!=="custom");
+  round=1;score=0;errors=0;updateStats();newDate();
+};
+$("minYear").onchange=$("maxYear").onchange=()=>{if($("difficulty").value==="custom"){round=1;score=0;errors=0;updateStats();newDate()}};
+
+newDate();
+</script>
+</body>
+</html>
